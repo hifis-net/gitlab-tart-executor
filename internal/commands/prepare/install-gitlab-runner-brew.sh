@@ -10,20 +10,19 @@
 #
 set -euo pipefail
 
-# Is GitLab Runner already installed?
-if type gitlab-runner &> /dev/null
-then
-  echo "GitLab Runner is already installed, skipping installation"
-
-  exit 0
-fi
-
+# Whether GitLab Runner needs to be installed is decided by the caller,
+# so always install or upgrade it here.
 echo "Updating Homebrew..."
 
 brew update
 
 echo "Installing GitLab Runner via Homebrew..."
 
-brew install gitlab-runner
+if brew list --versions gitlab-runner &> /dev/null
+then
+  brew upgrade gitlab-runner
+else
+  brew install gitlab-runner
+fi
 
 echo "GitLab Runner was successfully installed!"

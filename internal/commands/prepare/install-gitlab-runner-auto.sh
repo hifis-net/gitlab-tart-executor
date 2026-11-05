@@ -24,14 +24,8 @@ esac
 GITLAB_RUNNER_URL="https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-${OS}-${ARCH}"
 GITLAB_RUNNER_PATH="/usr/local/bin/gitlab-runner"
 
-# Is GitLab Runner already installed?
-if type gitlab-runner &> /dev/null
-then
-  echo "GitLab Runner is already installed, skipping installation"
-
-  exit 0
-fi
-
+# Whether GitLab Runner needs to be installed is decided by the caller,
+# so always install or upgrade it here.
 function install_via_brew() {
   echo "Updating Homebrew..."
 
@@ -39,7 +33,12 @@ function install_via_brew() {
 
   echo "Installing GitLab Runner via Homebrew..."
 
-  brew install gitlab-runner
+  if brew list --versions gitlab-runner &> /dev/null
+  then
+    brew upgrade gitlab-runner
+  else
+    brew install gitlab-runner
+  fi
 }
 
 function install_via_curl() {

@@ -23,15 +23,12 @@ esac
 
 GITLAB_RUNNER_VERSION="latest"
 GITLAB_RUNNER_URL="https://gitlab-runner-downloads.s3.amazonaws.com/${GITLAB_RUNNER_VERSION}/binaries/gitlab-runner-${OS}-${ARCH}"
-GITLAB_RUNNER_PATH="/usr/local/bin/gitlab-runner"
 
-# Is GitLab Runner already installed?
-if type gitlab-runner &> /dev/null
-then
-  echo "GitLab Runner is already installed, skipping installation"
-
-  exit 0
-fi
+# Replace the GitLab Runner that is currently resolved via PATH (for example the
+# one that comes preinstalled with the image) instead of adding a second binary
+# that might not be the first one in PATH. Whether an installation is needed at
+# all is decided by the caller.
+GITLAB_RUNNER_PATH="$(command -v gitlab-runner || echo "/usr/local/bin/gitlab-runner")"
 
 echo "Installing GitLab Runner using cURL..."
 
@@ -42,18 +39,20 @@ then
   exit 1
 fi
 
-# /usr/local is empty on fresh macOS installations
-# (for example, try ghcr.io/cirruslabs/macos-ventura-vanilla:latest)
-if test ! -e /usr/local/bin
-then
-  echo "Creating /usr/local/bin because it doesn't exist yet..."
-  sudo mkdir -p /usr/local/bin
-fi
+TEMP_DIR="$(mktemp -d)"
+trap 'rm -rf "${TEMP_DIR}"' EXIT
 
-echo "Downloading GitLab Runner from $GITLAB_RUNNER_URL to $GITLAB_RUNNER_PATH..."
-sudo curl --output "$GITLAB_RUNNER_PATH" "$GITLAB_RUNNER_URL"
+echo "Downloading GitLab Runner from $GITLAB_RUNNER_URL..."
+curl --fail --silent --show-error --location --output "${TEMP_DIR}/gitlab-runner" "$GITLAB_RUNNER_URL"
 
-echo "Making $GITLAB_RUNNER_PATH executable..."
-sudo chmod +x "$GITLAB_RUNNER_PATH"
+echo "Making the downloaded GitLab Runner executable..."
+chmod +x "${TEMP_DIR}/gitlab-runner"
+
+# Install atomically, so that a failed download never leaves a truncated
+# binary behind. Note that replacing a symlink that points to a Homebrew
+# installation only replaces the symlink and leaves the Homebrew keg intact.
+echo "Installing GitLab Runner to $GITLAB_RUNNER_PATH..."
+sudo mkdir -p "$(dirname "$GITLAB_RUNNER_PATH")"
+sudo mv -f "${TEMP_DIR}/gitlab-runner" "$GITLAB_RUNNER_PATH"
 
 echo "GitLab Runner was successfully installed!"
