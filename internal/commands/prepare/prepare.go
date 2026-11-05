@@ -184,52 +184,28 @@ func runPrepareVM(cmd *cobra.Command, _ []string) error {
 	}
 
 	if installGitlabRunnerScript != "" {
-		log.Println("Installing GitLab Runner...")
-
-		session, err := ssh.NewSession()
-		if err != nil {
-			return err
-		}
-		defer session.Close()
-
-		stdinBuf, err := session.StdinPipe()
+		installedVersion, err := gitlabRunnerVersion(ssh)
 		if err != nil {
 			return err
 		}
 
-		session.Stdout = os.Stdout
-		session.Stderr = os.Stderr
+		if needed, reason := gitlabRunnerInstallNeeded(config.InstallGitlabRunner, installedVersion); !needed {
+			log.Printf("GitLab Runner %s is already installed, skipping installation\n", installedVersion)
+		} else {
+			log.Printf("Installing GitLab Runner because %s...\n", reason)
 
-		if err := session.Shell(); err != nil {
-			return err
-		}
-
-		// Expose GitLab job environment variables to GitLab Runner installation script
-		for _, keyAndValue := range os.Environ() {
-			keyAndValue, found := strings.CutPrefix(keyAndValue, "CUSTOM_ENV_")
-			if !found {
-				// Doesn't look like a GitLab job environment variable
-				continue
-			}
-
-			key, value, _ := strings.Cut(keyAndValue, "=")
-
-			if _, err := fmt.Fprintf(stdinBuf, "export %s=%s\n", key, quote(value)); err != nil {
+			if err := installGitlabRunner(ssh, installGitlabRunnerScript); err != nil {
 				return err
 			}
-		}
 
-		// Perform GitLab Runner installation
-		if _, err := stdinBuf.Write([]byte(installGitlabRunnerScript)); err != nil {
-			return err
-		}
+			// Re-check, so that a failed or ineffective installation
+			// doesn't lead to a puzzling failure during the job execution
+			installedVersion, err = gitlabRunnerVersion(ssh)
+			if err != nil {
+				return err
+			}
 
-		if err := stdinBuf.Close(); err != nil {
-			return err
-		}
-
-		if err := session.Wait(); err != nil {
-			return err
+			logGitlabRunnerVersionMismatch(config.InstallGitlabRunner, installedVersion)
 		}
 	}
 
