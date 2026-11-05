@@ -23,10 +23,14 @@ esac
 
 GITLAB_RUNNER_VERSION="latest"
 GITLAB_RUNNER_URL="https://gitlab-runner-downloads.s3.amazonaws.com/${GITLAB_RUNNER_VERSION}/binaries/gitlab-runner-${OS}-${ARCH}"
-GITLAB_RUNNER_PATH="/usr/local/bin/gitlab-runner"
+
+# Replace the GitLab Runner that is currently resolved via PATH (for example the
+# one that comes preinstalled with the image) instead of adding a second binary
+# that might not be the first one in PATH.
+GITLAB_RUNNER_PATH="$(command -v gitlab-runner || echo "/usr/local/bin/gitlab-runner")"
 
 # Is GitLab Runner already installed?
-if type gitlab-runner &> /dev/null
+if [ "${TART_EXECUTOR_UPGRADE_GITLAB_RUNNER:-}" != "true" ] && type gitlab-runner &> /dev/null
 then
   echo "GitLab Runner is already installed, skipping installation"
 
